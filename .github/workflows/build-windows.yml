@@ -1,0 +1,50 @@
+name: Build Windows Executable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install streamlit pandas openpyxl pyinstaller
+
+      - name: Create runner script
+        run: |
+          echo import subprocess > run_app.py
+          echo import sys >> run_app.py
+          echo import os >> run_app.py
+          echo. >> run_app.py
+          echo def main(): >> run_app.py
+          echo     app_path = os.path.join(os.path.dirname(__file__), "app.py") >> run_app.py
+          echo     subprocess.run([sys.executable, "-m", "streamlit", "run", app_path, "--server.headless=true"]) >> run_app.py
+          echo. >> run_app.py
+          echo if __name__ == "__main__": >> run_app.py
+          echo     main() >> run_app.py
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --hidden-import streamlit run_app.py
+
+      - name: Rename executable
+        run: |
+          ren dist\run_app.exe UtilityTracker.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UtilityTracker
+          path: dist/UtilityTracker.exe

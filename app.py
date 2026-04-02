@@ -45,6 +45,14 @@ if uploaded_file is not None:
     if 'Num' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Num'].notna()]
 
+     # Add search input for Num value
+    search_num = st.text_input("Search by Num:", "")
+    
+    # Filter by search term if provided
+    if search_num:
+        filtered_df = filtered_df[filtered_df['Num'].astype(str).str.contains(search_num, case=False, na=False)]
+
+
     # Rearrange rows so that 'Unpaid' rows appear at the top
     filtered_df = filtered_df.sort_values(by='A/P Paid', ascending=False)
 
