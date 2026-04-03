@@ -45,6 +45,81 @@ if uploaded_file is not None:
     if 'Num' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Num'].notna()]
 
+    # Check for accounts with potentially missing instances
+    if 'Num' in filtered_df.columns and 'Date' in filtered_df.columns:
+        # Extract base account number (remove patterns like " Jan25", " fee", "-fee" at the end)
+        import re
+        base_accounts = filtered_df['Num'].astype(str).str.replace(r'(\s[A-Za-z]{3}\d{2}$|[-\s][Ff]ee$)', '', regex=True)
+        
+        # Extract month-year from Date column
+        filtered_df['Month'] = pd.to_datetime(filtered_df['Date']).dt.to_period('M')
+        
+        # Create a temporary dataframe with base accounts
+        temp_df = filtered_df.copy()
+        temp_df['Base_Account'] = base_accounts
+        
+        # Get all unique months sorted
+        all_months = sorted(temp_df['Month'].unique())
+        
+        # Find accounts missing in months after their first appearance
+        missing_accounts = []
+        
+        for account in temp_df['Base_Account'].unique():
+            account_data = temp_df[temp_df['Base_Account'] == account]
+            account_months = set(account_data['Month'])
+            
+            # Find first month this account appears
+            first_month = min(account_months)
+            
+            # Expected months: from first appearance to end of dataset
+            expected_months = [m for m in all_months if m >= first_month]
+            
+            # Find missing months
+            missing_months = [m for m in expected_months if m not in account_months]
+            
+            # Only include if missing 3 or fewer consecutive months
+            if missing_months and len(missing_months) <= 3:
+                # Check if they are consecutive
+                consecutive_count = 1
+                max_consecutive = 1
+                for i in range(1, len(missing_months)):
+                    if (missing_months[i] - missing_months[i-1]).n == 1:
+                        consecutive_count += 1
+                        max_consecutive = max(max_consecutive, consecutive_count)
+                    else:
+                        consecutive_count = 1
+                
+                    if max_consecutive <= 3:
+                        # Check if account is already in the list to avoid duplicates
+                        if not any(acc == account for acc, _ in missing_accounts):
+                            missing_accounts.append((account, missing_months))
+        
+        # Store missing accounts in session state
+        if 'excluded_accounts' not in st.session_state:
+            st.session_state.excluded_accounts = set()
+        
+        # Filter out excluded accounts
+        filtered_missing = [(acc, months) for acc, months in missing_accounts if acc not in st.session_state.excluded_accounts]
+        
+        if len(filtered_missing) > 0:
+            st.write(f"**Accounts that might be missing bills:**")
+            for account_num, missing_months in filtered_missing:
+                col1, col2 = st.columns([0.5, 9.5])
+                with col1:
+                    if st.button("❌", key=f"remove_{account_num}"):
+                        st.session_state.excluded_accounts.add(account_num)
+                        st.rerun()
+                with col2:
+                    month_list = ", ".join([m.strftime('%m/%Y') for m in missing_months])
+                    st.write(f"{account_num}: {month_list}")
+        else:
+            st.success("✓ No accounts missing bills")
+        
+        st.write("---")
+        
+        # Clean up temporary column
+        filtered_df = filtered_df.drop('Month', axis=1)
+
      # Add search input for Num value
     search_num = st.text_input("Search by Num:", "")
     
