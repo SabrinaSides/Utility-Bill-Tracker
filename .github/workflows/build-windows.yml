@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build Windows Package
 
 on:
   push:
@@ -15,90 +15,76 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Create portable package
         run: |
-          python -m pip install --upgrade pip
-          pip install streamlit pandas openpyxl pyinstaller
+          New-Item -ItemType Directory -Path package -Force
+          Copy-Item app.py package/
+          Copy-Item .gitignore package/ -ErrorAction SilentlyContinue
 
-      - name: Create runner script
-        run: |
+          # Create batch file
           @"
-          import subprocess
-          import sys
-          import os
+          @echo off
+          echo ============================================================
+          echo   Utility Bill Tracker
+          echo ============================================================
+          echo.
+          echo Checking Python installation...
+          python --version >nul 2>&1
+          if errorlevel 1 (
+              echo ERROR: Python is not installed!
+              echo Please install Python from https://www.python.org/downloads/
+              pause
+              exit /b 1
+          )
+          echo Python found!
+          echo.
+          echo Installing required packages...
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet streamlit pandas openpyxl
+          echo.
+          echo Starting Utility Bill Tracker...
+          echo Your browser should open automatically.
+          echo If not, open: http://localhost:8501
+          echo.
+          echo Press Ctrl+C to stop the application
+          echo ============================================================
+          python -m streamlit run app.py
+          "@ | Out-File -FilePath package\run.bat -Encoding ASCII
 
-          def main():
-              app_path = os.path.join(os.path.dirname(__file__), "app.py")
-              subprocess.run([sys.executable, "-m", "streamlit", "run", app_path, "--server.headless=true"])
-
-          if __name__ == "__main__":
-              main()
-          "@ | Out-File -FilePath run_app.py -Encoding UTF8
-
-      - name: Create spec file
-        run: |
+          # Create README
           @"
-          # -*- mode: python ; coding: utf-8 -*-
+          Utility Bill Tracker
+          ====================
 
-          block_cipher = None
+          Requirements:
+          - Python 3.8 or higher (download from https://www.python.org/downloads/)
 
-          a = Analysis(
-              ['run_app.py'],
-              pathex=[],
-              binaries=[],
-              datas=[('app.py', '.')],
-              hiddenimports=['streamlit', 'pandas', 'openpyxl', 'streamlit.web.cli'],
-              hookspath=[],
-              hooksconfig={},
-              runtime_hooks=[],
-              excludes=[],
-              win_no_prefer_redirects=False,
-              win_private_assemblies=False,
-              cipher=block_cipher,
-              noarchive=False,
-          )
-          pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+          Instructions:
+          1. Double-click 'run.bat' to start the application
+          2. First run will install required packages (takes 1-2 minutes)
+          3. Your browser will open automatically
+          4. To stop, close the terminal window or press Ctrl+C
 
-          exe = EXE(
-              pyz,
-              a.scripts,
-              [],
-              exclude_binaries=True,
-              name='UtilityTracker',
-              debug=False,
-              bootloader_ignore_signals=False,
-              strip=False,
-              upx=True,
-              console=True,
-              disable_windowed_traceback=False,
-              argv_emulation=False,
-              target_arch=None,
-              codesign_identity=None,
-              entitlements_file=None,
-          )
-          coll = COLLECT(
-              exe,
-              a.binaries,
-              a.zipfiles,
-              a.datas,
-              strip=False,
-              upx=True,
-              upx_exclude=[],
-              name='UtilityTracker',
-          )
-          "@ | Out-File -FilePath app.spec -Encoding UTF8
+          Troubleshooting:
+          - If you see "Python is not installed", install Python first
+          - If browser doesn't open, manually go to: http://localhost:8501
+          - Make sure no other app is using port 8501
 
-      - name: Build executable with spec
+          "@ | Out-File -FilePath package\README.txt -Encoding UTF8
+
+          # Create requirements file
+          @"
+          streamlit>=1.28.0
+          pandas>=2.0.0
+          openpyxl>=3.1.0
+          "@ | Out-File -FilePath package\requirements.txt -Encoding UTF8
+
+      - name: Create ZIP archive
         run: |
-          pyinstaller app.spec
+          Compress-Archive -Path package\* -DestinationPath UtilityTracker-Windows.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: UtilityTracker-Windows
-          path: dist/UtilityTracker/
+          path: UtilityTracker-Windows.zip
