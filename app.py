@@ -112,6 +112,27 @@ if uploaded_file is not None:
                 with col2:
                     month_list = ", ".join([m.strftime('%m/%Y') for m in missing_months])
                     st.write(f"{account_num}: {month_list}")
+
+                     # Export to Excel
+            export_data = []
+            for account_num, missing_months in filtered_missing:
+                month_list = ", ".join([m.strftime('%m/%Y') for m in missing_months])
+                export_data.append({"Account Number": account_num, "Missing Months": month_list})
+            
+            export_df = pd.DataFrame(export_data)
+            
+            # Convert to Excel
+            from io import BytesIO
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                export_df.to_excel(writer, index=False, sheet_name='Missing Bills')
+            
+            st.download_button(
+                label="📥 Download Missing Bills Report",
+                data=buffer.getvalue(),
+                file_name="missing_bills_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
         else:
             st.success("✓ No accounts missing bills")
         
